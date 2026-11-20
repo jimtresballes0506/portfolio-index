@@ -1,4 +1,4 @@
-name: Deploy Coffee Shop to GitHub Pages
+name: Deploy Portfolio Projects to GitHub Pages
 
 on:
   push:
@@ -17,9 +17,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./coffee-shop
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -28,14 +25,29 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: 'npm'
-          cache-dependency-path: './coffee-shop/package-lock.json'
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Build Project 01 — Coffee Shop
+        working-directory: ./coffee-shop
+        run: |
+          npm ci
+          npm run build
 
-      - name: Build production bundle
-        run: npm run build
+      - name: Build Project 02 — Online Thrift Store (Next.js Static Export)
+        working-directory: ./thrift-store
+        env:
+          GITHUB_PAGES: 'true'
+        run: |
+          npm ci
+          rm -rf src/app/api
+          npm run build
+
+      - name: Assemble GitHub Pages bundle
+        run: |
+          mkdir -p _site/coffee-shop _site/thrift-store
+          cp -r coffee-shop/dist/* _site/
+          cp -r coffee-shop/dist/* _site/coffee-shop/
+          cp -r thrift-store/out/* _site/thrift-store/
+          touch _site/.nojekyll
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -43,7 +55,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
         with:
-          path: './coffee-shop/dist'
+          path: './_site'
 
   deploy:
     environment:

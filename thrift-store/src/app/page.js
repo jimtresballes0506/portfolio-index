@@ -1,12 +1,30 @@
 import React from 'react';
 import ThriftStoreClient from '../components/ThriftStoreClient';
-import { getAllProducts, getAllOrders } from '../lib/db';
+import { INITIAL_PRODUCTS } from '../data/initialProducts';
 
-export const dynamic = 'force-dynamic';
+async function loadInitialData() {
+  if (process.env.GITHUB_PAGES === 'true') {
+    return {
+      initialProducts: INITIAL_PRODUCTS,
+      initialOrders: [],
+    };
+  }
+  try {
+    const { getAllProducts, getAllOrders } = await import('../lib/db');
+    return {
+      initialProducts: getAllProducts(),
+      initialOrders: getAllOrders(),
+    };
+  } catch {
+    return {
+      initialProducts: INITIAL_PRODUCTS,
+      initialOrders: [],
+    };
+  }
+}
 
-export default function HomePage() {
-  const initialProducts = getAllProducts();
-  const initialOrders = getAllOrders();
+export default async function HomePage() {
+  const { initialProducts, initialOrders } = await loadInitialData();
 
   return (
     <ThriftStoreClient

@@ -9,9 +9,12 @@ import CartDrawer from './CartDrawer';
 import CuratorAdminModal from './CuratorAdminModal';
 import GradingAndImpactSection from './GradingAndImpactSection';
 import Footer from './Footer';
+import { INITIAL_PRODUCTS } from '../data/initialProducts';
 
 const CART_STORAGE_KEY = 'rethread_archive_bag_v1';
 const WISHLIST_STORAGE_KEY = 'rethread_archive_wishlist_v1';
+const PRODUCTS_FALLBACK_KEY = 'rethread_archive_products_v1';
+const ORDERS_FALLBACK_KEY = 'rethread_archive_orders_v1';
 
 const DEFAULT_FILTERS = {
   category: 'All Archive',
@@ -29,7 +32,9 @@ export default function ThriftStoreClient({
   initialProducts = [],
   initialOrders = [],
 }) {
-  const [products, setProducts] = useState(initialProducts);
+  const [products, setProducts] = useState(
+    initialProducts.length > 0 ? initialProducts : INITIAL_PRODUCTS
+  );
   const [orders, setOrders] = useState(initialOrders);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [cartIds, setCartIds] = useState([]);
@@ -46,6 +51,21 @@ export default function ThriftStoreClient({
       if (savedCart) setCartIds(JSON.parse(savedCart));
       const savedWish = localStorage.getItem(WISHLIST_STORAGE_KEY);
       if (savedWish) setWishlistIds(JSON.parse(savedWish));
+
+      const savedProducts = localStorage.getItem(PRODUCTS_FALLBACK_KEY);
+      if (savedProducts) {
+        const parsed = JSON.parse(savedProducts);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setProducts(parsed);
+        }
+      }
+      const savedOrders = localStorage.getItem(ORDERS_FALLBACK_KEY);
+      if (savedOrders) {
+        const parsedOrders = JSON.parse(savedOrders);
+        if (Array.isArray(parsedOrders)) {
+          setOrders(parsedOrders);
+        }
+      }
     } catch {
       // Ignore storage errors
     }
@@ -66,6 +86,22 @@ export default function ThriftStoreClient({
       // Ignore storage errors
     }
   }, [wishlistIds]);
+
+  const persistLocalCatalog = (nextProducts, nextOrders) => {
+    try {
+      if (nextProducts) {
+        localStorage.setItem(
+          PRODUCTS_FALLBACK_KEY,
+          JSON.stringify(nextProducts)
+        );
+      }
+      if (nextOrders) {
+        localStorage.setItem(ORDERS_FALLBACK_KEY, JSON.stringify(nextOrders));
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  };
 
   const cartItems = useMemo(() => {
     return products.filter((p) => cartIds.includes(p.id) && !p.sold);
@@ -151,16 +187,42 @@ export default function ThriftStoreClient({
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.products) setProducts(data.products);
+        if (data.products) {
+          setProducts(data.products);
+          persistLocalCatalog(data.products, null);
+        }
         if (data.order) {
-          setOrders((prev) => [data.order, ...prev]);
+          const nextOrders = [data.order, ...orders];
+          setOrders(nextOrders);
+          persistLocalCatalog(null, nextOrders);
           setLastOrderReceipt(data.order);
         }
         setCartIds([]);
+        return;
       }
+    } catch {
+      // Static GitHub Pages fallback
     } finally {
       setIsBusy(false);
     }
+
+    // Fallback when running as a static GitHub Pages deployment
+    const purchasedIds = (orderPayload.items || []).map((i) => i.id);
+    const nextProducts = products.map((p) =>
+      purchasedIds.includes(p.id) ? { ...p, sold: true } : p
+    );
+    const localOrder = {
+      id: `ord-${Date.now().toString(36)}`,
+      orderNumber: `RT-${Math.floor(1000 + Math.random() * 9000)}`,
+      ...orderPayload,
+      createdAt: new Date().toISOString(),
+    };
+    const nextOrders = [localOrder, ...orders];
+    setProducts(nextProducts);
+    setOrders(nextOrders);
+    persistLocalCatalog(nextProducts, nextOrders);
+    setLastOrderReceipt(localOrder);
+    setCartIds([]);
   };
 
   const handleCreateProduct = async (newProductData) => {
@@ -173,11 +235,36 @@ export default function ThriftStoreClient({
       });
       if (res.ok) {
         const { product } = await res.json();
-        setProducts((prev) => [product, ...prev]);
+        const nextProducts = [product, ...products];
+        setProducts(nextProducts);
+        persistLocalCatalog(nextProducts, null);
+        return;
       }
+    } catch {
+      // Static fallback
     } finally {
       setIsBusy(false);
     }
+
+    const scoreMap = {
+      'Deadstock / Mint': 10,
+      'Excellent Vintage': 9,
+      'Good / Gently Worn': 8,
+      'Distressed / Patina': 7,
+    };
+    const localProduct = {
+      id: `rt-${Date.now().toString(36)}`,
+      sku: `RT-26-${Math.floor(100 + Math.random() * 900)}`,
+      ...newProductData,
+      conditionScore: scoreMap[newProductData.conditionGrade] || 9,
+      waterSavedLiters: 3500,
+      co2SavedKg: 8.5,
+      sold: false,
+      createdAt: new Date().toISOString(),
+    };
+    const nextProducts = [localProduct, ...products];
+    setProducts(nextProducts);
+    persistLocalCatalog(nextProducts, null);
   };
 
   const handleToggleProductSold = async (id, sold) => {
@@ -190,11 +277,22 @@ export default function ThriftStoreClient({
       });
       if (res.ok) {
         const { product } = await res.json();
-        setProducts((prev) => prev.map((p) => (p.id === id ? product : p)));
+        const nextProducts = products.map((p) => (p.id === id ? product : p));
+        setProducts(nextProducts);
+        persistLocalCatalog(nextProducts, null);
+        return;
       }
+    } catch {
+      // Static fallback
     } finally {
       setIsBusy(false);
     }
+
+    const nextProducts = products.map((p) =>
+      p.id === id ? { ...p, sold } : p
+    );
+    setProducts(nextProducts);
+    persistLocalCatalog(nextProducts, null);
   };
 
   const handleToggleProductFeatured = async (id, featured) => {
@@ -207,11 +305,22 @@ export default function ThriftStoreClient({
       });
       if (res.ok) {
         const { product } = await res.json();
-        setProducts((prev) => prev.map((p) => (p.id === id ? product : p)));
+        const nextProducts = products.map((p) => (p.id === id ? product : p));
+        setProducts(nextProducts);
+        persistLocalCatalog(nextProducts, null);
+        return;
       }
+    } catch {
+      // Static fallback
     } finally {
       setIsBusy(false);
     }
+
+    const nextProducts = products.map((p) =>
+      p.id === id ? { ...p, featured } : p
+    );
+    setProducts(nextProducts);
+    persistLocalCatalog(nextProducts, null);
   };
 
   const handleDeleteProduct = async (id) => {
@@ -221,12 +330,22 @@ export default function ThriftStoreClient({
         method: 'DELETE',
       });
       if (res.ok) {
-        setProducts((prev) => prev.filter((p) => p.id !== id));
+        const nextProducts = products.filter((p) => p.id !== id);
+        setProducts(nextProducts);
+        persistLocalCatalog(nextProducts, null);
         setCartIds((prev) => prev.filter((cid) => cid !== id));
+        return;
       }
+    } catch {
+      // Static fallback
     } finally {
       setIsBusy(false);
     }
+
+    const nextProducts = products.filter((p) => p.id !== id);
+    setProducts(nextProducts);
+    persistLocalCatalog(nextProducts, null);
+    setCartIds((prev) => prev.filter((cid) => cid !== id));
   };
 
   const handleResetArchive = async () => {
@@ -236,10 +355,17 @@ export default function ThriftStoreClient({
       if (res.ok) {
         const { products: freshProducts } = await res.json();
         setProducts(freshProducts);
+        persistLocalCatalog(freshProducts, null);
+        return;
       }
+    } catch {
+      // Static fallback
     } finally {
       setIsBusy(false);
     }
+
+    setProducts(INITIAL_PRODUCTS);
+    persistLocalCatalog(INITIAL_PRODUCTS, null);
   };
 
   return (
