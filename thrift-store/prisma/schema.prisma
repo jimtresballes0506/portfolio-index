@@ -1,0 +1,55 @@
+// Prisma Schema for RE:THREAD ARCHIVE — Online Vintage & Thrift Store
+// Backed by SQLite database at prisma/thrift.db
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./thrift.db"
+}
+
+model Product {
+  id              String   @id
+  sku             String   @unique
+  title           String
+  brand           String
+  category        String
+  era             String
+  size            String
+  fitsLike        String
+  conditionGrade  String
+  conditionScore  Int
+  conditionNotes  String
+  price           Float
+  originalRetail  Float
+  material        String
+  origin          String
+  measurementsJson String
+  tagsJson        String
+  waterSavedLiters Int
+  co2SavedKg      Float
+  image           String
+  featured        Boolean  @default(false)
+  sold            Boolean  @default(false)
+  createdAt       DateTime @default(now())
+}
+
+model Order {
+  id               String   @id
+  orderNumber      String   @unique
+  customerName     String
+  customerEmail    String
+  shippingAddress  String
+  deliveryMethod   String
+  promoCode        String?
+  subtotal         Float
+  discount         Float
+  shippingCost     Float
+  total            Float
+  waterSavedLiters Int
+  co2SavedKg       Float
+  itemsJson        String
+  createdAt        DateTime @default(now())
+}

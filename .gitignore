@@ -1,9 +1,15 @@
 # Dependencies
 **/node_modules/
 
-# Build outputs
+# Build outputs & SQLite runtime databases
 **/dist/
 **/dist-ssr/
+**/.next/
+**/out/
+**/*.db
+**/*.db-journal
+**/*.db-wal
+**/*.db-shm
 
 # Logs & OS files
 *.log
